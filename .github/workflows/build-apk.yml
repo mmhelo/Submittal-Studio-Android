@@ -1,0 +1,87 @@
+name: Build Submittal Studio APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate source archive
+        run: unzip -t source.zip
+
+      - name: Extract Android project
+        run: unzip -q source.zip -d src
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bundle offline JavaScript libraries
+        working-directory: src/Submittal-Studio-Android
+        shell: bash
+        run: |
+          set -euxo pipefail
+          npm init -y >/dev/null 2>&1
+          npm install --no-save --ignore-scripts pdf-lib@1.17.1 pdfjs-dist@3.11.174 mammoth@1.8.0 xlsx@0.18.5
+          V=app/src/main/assets/vendor
+          mkdir -p "$V"
+          cp node_modules/pdf-lib/dist/pdf-lib.min.js "$V/pdf-lib.min.js"
+          cp node_modules/pdfjs-dist/build/pdf.min.js "$V/pdf.min.js"
+          cp node_modules/pdfjs-dist/build/pdf.worker.min.js "$V/pdf.worker.min.js"
+          cp node_modules/mammoth/mammoth.browser.min.js "$V/mammoth.browser.min.js"
+          cp node_modules/xlsx/dist/xlsx.full.min.js "$V/xlsx.full.min.js"
+
+      - name: Verify Flexible Sections source
+        working-directory: src/Submittal-Studio-Android
+        run: |
+          chmod +x verify-source.sh
+          ./verify-source.sh
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform
+        run: yes | sdkmanager "platforms;android-36" "build-tools;35.0.0" >/dev/null
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build installable APK
+        working-directory: src/Submittal-Studio-Android
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK and checksum
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp src/Submittal-Studio-Android/app/build/outputs/apk/debug/app-debug.apk dist/Submittal_Studio_V2_7.apk
+          sha256sum dist/Submittal_Studio_V2_7.apk | tee dist/SHA256.txt
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Submittal-Studio-V2.7-APK
+          path: |
+            dist/Submittal_Studio_V2_7.apk
+            dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
