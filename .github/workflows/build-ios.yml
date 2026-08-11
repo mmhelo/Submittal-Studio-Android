@@ -1,0 +1,85 @@
+name: Build Submittal Studio iOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - 'source.zip'
+      - '.github/workflows/build-ios.yml'
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate and extract shared V2.7 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -t source.zip >/dev/null
+          rm -rf _ios_source
+          mkdir -p _ios_source
+          unzip -q source.zip -d _ios_source
+          test -f _ios_source/Submittal-Studio-Android/app/src/main/assets/index.html
+          test -f _ios_source/Submittal-Studio-Android/app/src/main/assets/app.js
+          grep -q 'addSection' _ios_source/Submittal-Studio-Android/app/src/main/assets/app.js
+          echo 'Shared V2.7 source validated.'
+
+      - name: Copy exact web assets into iOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf ios/SubmittalStudio/Web
+          mkdir -p ios/SubmittalStudio/Web
+          cp -R _ios_source/Submittal-Studio-Android/app/src/main/assets/. ios/SubmittalStudio/Web/
+          test -f ios/SubmittalStudio/Web/index.html
+          test -f ios/SubmittalStudio/Web/app.js
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: |
+          cd ios
+          xcodegen generate
+          xcodebuild -project SubmittalStudio.xcodeproj -list
+
+      - name: Build unsigned iPhone app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project ios/SubmittalStudio.xcodeproj \
+            -scheme SubmittalStudio \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build-ios \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            clean build
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP='build-ios/Build/Products/Release-iphoneos/SubmittalStudio.app'
+          test -d "$APP"
+          rm -rf Payload Submittal_Studio_V2_7_iOS_Unsigned.ipa
+          mkdir Payload
+          cp -R "$APP" Payload/
+          /usr/bin/zip -qry Submittal_Studio_V2_7_iOS_Unsigned.ipa Payload
+          shasum -a 256 Submittal_Studio_V2_7_iOS_Unsigned.ipa | tee Submittal_Studio_V2_7_iOS_Unsigned.sha256
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Submittal-Studio-V2.7-iOS-Unsigned
+          path: |
+            Submittal_Studio_V2_7_iOS_Unsigned.ipa
+            Submittal_Studio_V2_7_iOS_Unsigned.sha256
+          if-no-files-found: error
+          retention-days: 30
