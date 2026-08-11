@@ -1,0 +1,48 @@
+name: SubmittalStudio
+options:
+  bundleIdPrefix: com.alfanar
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  SubmittalStudio:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: SubmittalStudio
+        excludes:
+          - Web
+    resources:
+      - path: SubmittalStudio/Web
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.alfanar.submittalstudio
+        PRODUCT_NAME: SubmittalStudio
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: "1,2"
+        IPHONEOS_DEPLOYMENT_TARGET: "15.0"
+    info:
+      path: SubmittalStudio/Info.plist
+      properties:
+        CFBundleDisplayName: Submittal Studio
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+schemes:
+  SubmittalStudio:
+    build:
+      targets:
+        SubmittalStudio: all
+    run:
+      config: Debug
+    archive:
+      config: Release
